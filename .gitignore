@@ -42,3 +42,8 @@ __pycache__/
 /arceos/Error.log
 /arceos/payload/mapfile_c/mapfile
 /arceos/payload/skernel2/skernel2
+/arceos/netdump.pcap
+/arceos/arceos-fada.bin.gz
+/arceos/arceos-fada.itb
+.DS_Store
+._*

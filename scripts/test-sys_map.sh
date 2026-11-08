@@ -1,6 +1,7 @@
 #!/bin/bash
 
-tmp_file=mmap_test_output.txt
+tmp_file=$(mktemp) || exit 1
+trap 'rm -f -- "$tmp_file"' EXIT
 grep_content="Read back content: hello, arceos!"
 
 cd "$(dirname "$0")/../arceos" || exit 1
@@ -14,11 +15,10 @@ make disk_img
 make payload
 ./update_disk.sh payload/mapfile_c/mapfile
 
-make run A=exercises/sys_map/ BLK=y | tee $tmp_file
+make run A=exercises/sys_map/ BLK=y | tee "$tmp_file"
 
-output=$(grep -Ea "$grep_content" ./$tmp_file)
+output=$(grep -Ea "$grep_content" "$tmp_file")
 
-rm -rf $tmp_file 
 
 if [[ -z "$output" ]]; then
     echo "sys_mmap default"

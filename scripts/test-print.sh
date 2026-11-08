@@ -9,9 +9,11 @@ make pflash_img
 make disk_img
 
 
-make run A=exercises/print_with_color/ | tee a.txt
+tmp_file=$(mktemp) || exit 1
+trap 'rm -f -- "$tmp_file"' EXIT
+make run A=exercises/print_with_color/ | tee "$tmp_file"
 
-context=$(tail -n 20 ./a.txt )
+context=$(tail -n 20 "$tmp_file")
 
 has_color=false
 has_text=false
@@ -23,9 +25,7 @@ if [[ "$context" == *$'\x1b['* ]]; then
 
     sed_context=$(echo "$context" | sed 's/\x1b\[[0-9;]*m//g')
 
-    echo "$sed_context" > c.txt
-
-    if grep -q "Hello, Arceos!" c.txt ; then
+    if grep -q "Hello, Arceos!" <<< "$sed_context" ; then
         echo "Has Hello, Arceos!"
         has_text=true
     else
@@ -35,8 +35,6 @@ else
     echo "No color"
 fi
 
-
-rm a.txt b.txt c.txt -f
 
 if [[ "$has_color" == true && "$has_text" == true ]]; then
     echo "print_with_color pass"
