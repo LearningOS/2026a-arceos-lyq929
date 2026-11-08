@@ -28,3 +28,17 @@ __pycache__/
 
 # Pin the dependency graph used by the 2024 ArceOS toolchain
 !/arceos/Cargo.lock
+
+# Local exercise test output
+/test.output
+/arceos/a.txt
+/arceos/b.txt
+/arceos/c.txt
+/arceos/hashmap_output.txt
+/arceos/mmap_test_output.txt
+/arceos/hv_output.txt
+/arceos/tmpfile
+/arceos/Success.log
+/arceos/Error.log
+/arceos/payload/mapfile_c/mapfile
+/arceos/payload/skernel2/skernel2
