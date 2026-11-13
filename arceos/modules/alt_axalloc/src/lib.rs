@@ -36,8 +36,12 @@ impl GlobalAllocator {
     }
 
     /// Add the given region to the allocator.
-    pub fn add_memory(&self, _start_vaddr: usize, _size: usize) -> AllocResult {
-        unimplemented!()
+    /// 把一段新内存交给底层分配器管理。
+    ///
+    /// 早期分配器只支持一段连续区间，所以这里最终总是返回失败，
+    /// 但仍然要完成“加锁 + 转发”的调用链。
+    pub fn add_memory(&self, start_vaddr: usize, size: usize) -> AllocResult {
+        self.inner.lock().add_memory(start_vaddr, size)
     }
 
     /// Allocate arbitrary number of bytes. Returns the left bound of the
@@ -116,6 +120,7 @@ pub fn global_init(start_vaddr: usize, size: usize) {
 }
 
 /// Add the given memory region to the global allocator.
-pub fn global_add_memory(_start_vaddr: usize, _size: usize) -> AllocResult {
-    unimplemented!()
+pub fn global_add_memory(start_vaddr: usize, size: usize) -> AllocResult {
+    // 全局实例只是一个带自旋锁的外壳，具体策略由底层分配器决定。
+    GLOBAL_ALLOCATOR.add_memory(start_vaddr, size)
 }

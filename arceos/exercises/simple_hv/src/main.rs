@@ -29,6 +29,21 @@ use crate::regs::GprIndex::{A0, A1};
 
 const VM_ENTRY: usize = 0x8020_0000;
 
+/// `mhartid` 的 CSR 编号。它是 M 模式寄存器，VS 模式访问会触发非法指令异常。
+const CSR_MHARTID: usize = 0xf14;
+/// 客体内核 `ld a0, 64(zero)` 使用的客户物理地址。
+const GUEST_MAGIC_ADDR: usize = 0x40;
+/// 模拟返回给客体的 hart id。
+const EMU_HART_ID: usize = 0x1234;
+/// 模拟返回给客体的 magic 值。
+const EMU_MAGIC_VAL: usize = 0x6688;
+
+/// 从指令字里取出 CSR 编号，也就是 inst[31:20] 这一段。
+#[inline]
+fn insn_csr(inst: usize) -> usize {
+    (inst >> 20) & 0xfff
+}
+
 #[cfg_attr(feature = "axstd", no_mangle)]
 fn main() {
     ax_println!("Hypervisor ...");
@@ -90,8 +105,8 @@ fn vmexit_handler(ctx: &mut VmCpuRegisters) -> bool {
                         let a0 = ctx.guest_regs.gprs.reg(A0);
                         let a1 = ctx.guest_regs.gprs.reg(A1);
                         ax_println!("a0 = {:#x}, a1 = {:#x}", a0, a1);
-                        assert_eq!(a0, 0x6688);
-                        assert_eq!(a1, 0x1234);
+                        assert_eq!(a0, EMU_MAGIC_VAL);
+                        assert_eq!(a1, EMU_HART_ID);
                         ax_println!("Shutdown vm normally!");
                         return true;
                     },
@@ -102,16 +117,34 @@ fn vmexit_handler(ctx: &mut VmCpuRegisters) -> bool {
             }
         },
         Trap::Exception(Exception::IllegalInstruction) => {
-            panic!("Bad instruction: {:#x} sepc: {:#x}",
-                stval::read(),
-                ctx.guest_regs.sepc
-            );
+            // 客体会执行 `csrr a1, mhartid`，而 mhartid 在 VS 模式不可见。
+            // 这里做一次指令模拟：写入假的 hart id，然后跳过这条指令。
+            let inst = stval::read();
+            if insn_csr(inst) == CSR_MHARTID {
+                ctx.guest_regs.gprs.set_reg(A1, EMU_HART_ID);
+                ctx.guest_regs.sepc += 4;
+            } else {
+                panic!(
+                    "Bad instruction: {:#x} sepc: {:#x}",
+                    inst,
+                    ctx.guest_regs.sepc
+                );
+            }
         },
         Trap::Exception(Exception::LoadGuestPageFault) => {
-            panic!("LoadGuestPageFault: stval{:#x} sepc: {:#x}",
-                stval::read(),
-                ctx.guest_regs.sepc
-            );
+            // 客体会从客户物理地址 0x40 读 magic 值，而那一页并没有建立映射。
+            // 这里模拟这条 load：直接填好 a0，并跳过指令。
+            let fault_addr = stval::read();
+            if fault_addr == GUEST_MAGIC_ADDR {
+                ctx.guest_regs.gprs.set_reg(A0, EMU_MAGIC_VAL);
+                ctx.guest_regs.sepc += 4;
+            } else {
+                panic!(
+                    "LoadGuestPageFault: stval {:#x} sepc: {:#x}",
+                    fault_addr,
+                    ctx.guest_regs.sepc
+                );
+            }
         },
         _ => {
             panic!(

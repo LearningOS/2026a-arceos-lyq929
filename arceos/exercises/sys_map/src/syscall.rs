@@ -1,13 +1,16 @@
 #![allow(dead_code)]
 
+use alloc::vec::Vec;
 use core::ffi::{c_void, c_char, c_int};
 use axhal::arch::TrapFrame;
 use axhal::trap::{register_trap_handler, SYSCALL};
+use axhal::mem::{MemoryAddr, VirtAddr, PAGE_SIZE_4K};
 use axerrno::LinuxError;
 use axtask::current;
 use axtask::TaskExtRef;
 use axhal::paging::MappingFlags;
 use arceos_posix_api as api;
+use memory_addr::VirtAddrRange;
 
 const SYS_IOCTL: usize = 29;
 const SYS_OPENAT: usize = 56;
@@ -131,7 +134,6 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
     ret
 }
 
-#[allow(unused_variables)]
 fn sys_mmap(
     addr: *mut usize,
     length: usize,
@@ -140,7 +142,55 @@ fn sys_mmap(
     fd: i32,
     _offset: isize,
 ) -> isize {
-    unimplemented!("no sys_mmap!");
+    let prot = MmapProt::from_bits_truncate(prot);
+    let flags = MmapFlags::from_bits_truncate(flags);
+
+    // 映射以整页为单位，长度先向上取整到页边界。
+    let length = (length + PAGE_SIZE_4K - 1) / PAGE_SIZE_4K * PAGE_SIZE_4K;
+    if length == 0 {
+        return -LinuxError::EINVAL.code() as isize;
+    }
+
+    // 文件映射要先把内容读进内核缓冲，这样后面的加锁区间里就不用再做 I/O。
+    let mut content = Vec::new();
+    if !flags.contains(MmapFlags::MAP_ANONYMOUS) && fd >= 0 {
+        content.resize(length, 0u8);
+        let nread = api::sys_read(fd, content.as_mut_ptr() as *mut c_void, length);
+        if nread < 0 {
+            return nread as isize;
+        }
+        content.truncate(nread as usize);
+    }
+
+    let curr = current();
+    let mut aspace = curr.task_ext().aspace.lock();
+
+    // 0 页永远不映射，这样用户态可以直接用返回的 NULL 判断失败。
+    let requested = addr as usize;
+    let hint = VirtAddr::from(if requested < PAGE_SIZE_4K {
+        PAGE_SIZE_4K
+    } else {
+        requested
+    });
+    let start = if flags.contains(MmapFlags::MAP_FIXED) {
+        hint.align_down_4k()
+    } else {
+        let limit = VirtAddrRange::from_start_size(aspace.base(), aspace.size());
+        match aspace.find_free_area(hint, length, limit) {
+            Some(vaddr) => vaddr,
+            None => return -LinuxError::ENOMEM.code() as isize,
+        }
+    };
+
+    if aspace.map_alloc(start, length, prot.into(), true).is_err() {
+        return -LinuxError::ENOMEM.code() as isize;
+    }
+    // 把刚才读到的文件内容填进新映射。
+    if !content.is_empty() {
+        aspace.write(start, &content).unwrap();
+    }
+
+    start.as_usize() as isize
 }
 
 fn sys_openat(dfd: c_int, fname: *const c_char, flags: c_int, mode: api::ctypes::mode_t) -> isize {

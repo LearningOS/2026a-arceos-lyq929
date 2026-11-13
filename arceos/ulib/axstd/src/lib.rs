@@ -55,7 +55,11 @@ extern crate alloc;
 
 #[cfg(feature = "alloc")]
 #[doc(no_inline)]
-pub use alloc::{boxed, collections, format, string, vec};
+pub use alloc::{boxed, format, string, vec};
+
+/// 集合类型：转发 `alloc::collections`，并额外提供自带的 `HashMap`。
+#[cfg(feature = "alloc")]
+pub mod collections;
 
 #[doc(no_inline)]
 pub use core::{arch, cell, cmp, hint, marker, mem, ops, ptr, slice, str};
