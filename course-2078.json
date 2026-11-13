@@ -2,8 +2,8 @@
   "schema": 1,
   "courseId": 2078,
   "repository": "LearningOS/2026a-arceos-lyq929",
-  "commit": "3dd8b1ce40b11b5d0773682b8bfbfbd425c37ec2",
-  "score": 500,
+  "commit": "85bfc04b07728ce98b8f98c93132d61bec3f707e",
+  "score": 600,
   "totalScore": 600,
   "exercises": [
     {
@@ -44,15 +44,15 @@
     {
       "name": "simple_hv",
       "max": 100,
-      "score": 0,
-      "status": "timeout",
-      "exitCode": 124
+      "score": 100,
+      "status": "pass",
+      "exitCode": 0
     }
   ],
   "student": "lyq929",
-  "runId": "43427925187",
+  "runId": "43430863570",
   "runAttempt": "1",
   "upload": {
-    "status": "accepted"
+    "status": "pending"
   }
 }
